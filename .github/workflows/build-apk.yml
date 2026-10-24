@@ -1,0 +1,62 @@
+
+name: Build Mess APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '**'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find Android project
+        id: project
+        shell: bash
+        run: |
+          if [ -f "settings.gradle" ] || [ -f "settings.gradle.kts" ]; then
+            echo "dir=." >> "$GITHUB_OUTPUT"
+          elif [ -f "mess-android-wrapper/settings.gradle" ] || [ -f "mess-android-wrapper/settings.gradle.kts" ]; then
+            echo "dir=mess-android-wrapper" >> "$GITHUB_OUTPUT"
+          elif [ -f "project/settings.gradle" ] || [ -f "project/settings.gradle.kts" ]; then
+            echo "dir=project" >> "$GITHUB_OUTPUT"
+          else
+            echo "ERROR: Could not find settings.gradle"
+            echo "Repository files:"
+            ls -la
+            exit 1
+          fi
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Debug APK
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: gradle assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mess-debug-APK
+          path: |
+            ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
