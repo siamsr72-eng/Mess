@@ -6,9 +6,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - '**'
-      - '.github/workflows/build-apk.yml'
 
 permissions:
   contents: read
@@ -22,20 +19,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Find Android project
-        id: project
-        shell: bash
+      - name: Extract Android project
         run: |
-          if [ -f "settings.gradle" ] || [ -f "settings.gradle.kts" ]; then
-            echo "dir=." >> "$GITHUB_OUTPUT"
-          elif [ -f "mess-android-wrapper/settings.gradle" ] || [ -f "mess-android-wrapper/settings.gradle.kts" ]; then
-            echo "dir=mess-android-wrapper" >> "$GITHUB_OUTPUT"
-          elif [ -f "project/settings.gradle" ] || [ -f "project/settings.gradle.kts" ]; then
-            echo "dir=project" >> "$GITHUB_OUTPUT"
+          if [ -f "mess-android-wrapper-fixed.zip" ]; then
+            unzip -q mess-android-wrapper-fixed.zip -d extracted
+          elif [ -f "mess-android-wrapper.zip" ]; then
+            unzip -q mess-android-wrapper.zip -d extracted
           else
-            echo "ERROR: Could not find settings.gradle"
-            echo "Repository files:"
+            echo "ERROR: Android project ZIP not found."
             ls -la
+            exit 1
+          fi
+
+          if [ ! -f "extracted/mess-android-wrapper/settings.gradle" ]; then
+            echo "ERROR: settings.gradle not found after extraction."
+            find extracted -maxdepth 4 -type f
             exit 1
           fi
 
@@ -47,16 +45,17 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
 
       - name: Build Debug APK
-        working-directory: ${{ steps.project.outputs.dir }}
-        run: gradle assembleDebug --stacktrace
+        working-directory: extracted/mess-android-wrapper
+        run: gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Mess-debug-APK
-          path: |
-            ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/*.apk
+          path: extracted/mess-android-wrapper/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
